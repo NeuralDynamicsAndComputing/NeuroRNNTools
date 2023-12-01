@@ -4,7 +4,7 @@ PyTorch models for RNNs commonly used in computational neuroscience.
 PyTorch nn modules and associated utilities for recurrent rate network models and spiking network models commonly used in computational neuroscience. 
 
 
-# Rate network models.
+# Rate network model
 
 ## Quick start
 
@@ -199,4 +199,6 @@ The output from the network.
 If `return_time_series==True`, this will be a 3-dimensional array with shape `(batch_size, Nt, Nout)` representing the time series of the output.
 
 If `return_time_series==True`, this will be a 2-dimensional array with shape `(batch_size, Nout)` representing the final state of the output.
+
+# Spiking network model
 
