@@ -423,9 +423,6 @@ class SpikingModel(nn.Module):
 
             if RecordV:
                 SimResults['V'][:,i,:] = self.V[:,VIRecord]+S[:,VIRecord]*(self.Vth-self.V[:,VIRecord])
-                #if len(indices)>0:
-                #    print('!',S[:,VIRecord]*(self.Vth-self.V[:,VIRecord]))
-                #SimResults['V'][indices[VIRecord],i]=self.Vth
 
             if RecordSandY:
                 irecord = int(i*dt/dtRecord)
@@ -436,7 +433,7 @@ class SpikingModel(nn.Module):
 
         if RecordSandY:
             SimResults['S'] *= (1/NdtRecord)
-            SimResults['Y'] *= (1 / NdtRecord)
+            SimResults['Y'] *= (1/NdtRecord)
 
         return SimResults
 
