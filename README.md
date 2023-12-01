@@ -180,7 +180,7 @@ A flag determining whether a time series is returned from the forward pass or ju
 
 If `return_time_series==True` then `y` has shape `(batch_size, Nt, Nout)`
 
-If `return_time_series==True` then `y` has shape `(batch_size, Nout)` because only the final state is returned.
+If `return_time_series==False` then `y` has shape `(batch_size, Nout)` because only the final state is returned.
 
 ### `initial_state`
 
