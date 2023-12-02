@@ -270,6 +270,20 @@ class SpikingModel(nn.Module):
             self.VT = NeuronParams.get('VT',-55)
             self.DT = NeuronParams.get('DT',1)
             self.f = (lambda V,I: ((-(V-self.EL)+self.DT*torch.exp((V-self.VT)/self.DT)+I)/self.taum))
+        elif NeuronModel == 'CondEIF':
+            self.taum = NeuronParams.get('taum',10)
+            self.EL = NeuronParams.get('EL',-72)
+            self.Vth = NeuronParams.get('Vth',0)
+            self.Vre = NeuronParams.get('Vre',-72)
+            self.VT = NeuronParams.get('VT',-55)
+            self.DT = NeuronParams.get('DT',1.0)
+            self.Ne = NeuronParams.get('Ne',int(self.N_recurrent*.8))
+            temp = torch.ones(self.N_recurrent)
+            temp[:self.Ne]=0.0
+            temp[self.Ne:] = -80.0
+            self.E = NeuronParams.get('E',temp.copy())
+            self.f = (lambda V,I: ((-(V-self.EL)+self.DT*torch.exp((V-self.VT)/self.DT)-I*(V-self.E))/self.taum))
+
         elif NeuronModel == 'LIF':
             self.taum = NeuronParams.get('taum',10)
             self.EL = NeuronParams.get('EL',-72)

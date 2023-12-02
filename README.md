@@ -6,7 +6,19 @@ PyTorch nn modules and associated utilities for recurrent rate network models an
 
 # Rate network model
 
-## Quick start
+## Quick reference
+
+```
+model = RateModel(recurrent, readin=None, readout=None, f='tanh', eta=1, rho_recurrent=1, rho_input=1, 
+                  rho_output=1, bias_recurrent=False, bias_output=False, Network_Type='R')
+
+
+y = model(x, Nt = None, return_time_series = True, initial_state = 'zero')
+```
+
+
+
+## Quick start: a basic model
 
 
 A standard RNN can be created using
@@ -25,6 +37,8 @@ y_{n+1} = f(Jy_n + J_x x_n)
 $$
 
 where $x_n$ is the input on time step $n$, $J$ is the recurrent connectivity matrix, and $J_x$ is the input or ``read-in'' matrix. 
+
+For another example (simulating continuous time dynamics), see `RateModelExamples.ipynb`
 
 ## Model details
 
