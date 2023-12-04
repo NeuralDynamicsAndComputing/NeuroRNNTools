@@ -269,12 +269,14 @@ class SpikingModel(nn.Module):
             self.Vre = NeuronParams.get('Vre',-72)
             self.VT = NeuronParams.get('VT',-55)
             self.DT = NeuronParams.get('DT',1)
+            self.Vlb = NeuronParams.get('Vlb',-85)
             self.f = (lambda V,I: ((-(V-self.EL)+self.DT*torch.exp((V-self.VT)/self.DT)+I)/self.taum))
         elif NeuronModel == 'CondEIF':
             self.taum = NeuronParams.get('taum',10)
             self.EL = NeuronParams.get('EL',-72)
             self.Vth = NeuronParams.get('Vth',0)
             self.Vre = NeuronParams.get('Vre',-72)
+            self.Vlb = -torch.inf
             self.VT = NeuronParams.get('VT',-55)
             self.DT = NeuronParams.get('DT',1.0)
             self.Ne = NeuronParams.get('Ne',int(self.N_recurrent*.8))
@@ -289,10 +291,12 @@ class SpikingModel(nn.Module):
             self.EL = NeuronParams.get('EL',-72)
             self.Vth = NeuronParams.get('Vth',-55)
             self.Vre = NeuronParams.get('Vre',-72)
+            self.Vlb = NeuronParams.get('Vlb', -85)
             self.f = (lambda V,I: ((-(V - self.EL)+I)/self.taum))
         elif callable(NeuronModel):
-            self.Vth = NeuronModel['Vth']
-            self.Vre = NeuronModel['Vre']
+            self.Vth = NeuronParams['Vth']
+            self.Vre = NeuronParams['Vre']
+            self.Vlb = NeuronParams['Vlb']
             self.f = NeuronModel
         else:
             raise Exception("NeuronModel should be 'EIF', 'LIF', or a function of two variables (V,I).")
@@ -422,7 +426,8 @@ class SpikingModel(nn.Module):
                     Z = Z + self.input_layer(x[:,i,:])
                 else:
                     Z = Z + JxX
-            self.V = self.V + dt*self.f(self.V, Z)
+            self.V = torch.clamp(self.V + dt*self.f(self.V, Z), min=self.Vlb)
+
             S.zero_()
             indices = torch.nonzero(self.V>=self.Vth, as_tuple = True)
             S[indices] = 1.0
