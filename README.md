@@ -212,7 +212,49 @@ The output from the network.
 
 If `return_time_series==True`, this will be a 3-dimensional array with shape `(batch_size, Nt, Nout)` representing the time series of the output.
 
-If `return_time_series==True`, this will be a 2-dimensional array with shape `(batch_size, Nout)` representing the final state of the output.
+If `return_time_series==False`, this will be a 2-dimensional array with shape `(batch_size, Nout)` representing the final state of the output.
 
 # Spiking network model
+
+## Quick reference
+
+```
+model = SpikingModel(recurrent, tausyn, readin=None, NeuronModel='EIF', NeuronParams={})
+
+
+SimResults = model(x0, dt, x=None, T=None, initial_V='random', initial_Y='zero', dtRecord = None, Tburn = 0, VIRecord = [])
+```
+
+
+See `EISpikingModelExample.ipynb` for an example of a randomly connected excitatory-inhibitory network of EIF model neurons.
+
+## Model details
+
+Simulates a recurrent network of integrate-and-fire neurons. Membrane potentials of the $N$ neurons obey
+
+$$
+\frac{dV}{dt}=f(V,Z)
+$$
+
+with the added condition that $V$ is reset to $V_{re}$ every time it crosses $V_{th}$. At each reset time, a spike is recorded in $S(t)$. In particular, $S(t)$ is a binarized representation of the spike trains,
+
+$$
+S_j(t) = \sum_i \delta(t-t_{i,j}) 
+$$
+
+where $t_{i,j}$ is the $i$th spike time (i.e., the $i$th threshold crossing) of neuron $j$.
+
+Synaptic outputs are defined by
+
+$$
+\tau_{syn}\frac{dY}{dt}=-Y+S
+$$
+
+which is just a vector of low-pass filtered spike trains. Total inputs are defined by 
+
+$$
+Z=JY+J_x X
+$$
+
+where $J$ is an $N\times N$ recurrent connectivity matrix implemented by the linear layer `self.recurrent`, $J_x$ is an $N\times N_x$ feedforward connectivity matrix implemented by the linear layer `self.input_layer` 
 

@@ -402,7 +402,7 @@ class SpikingModel(nn.Module):
         # Now start the acutal forward pass
         S = torch.zeros(batch_size, self.N_recurrent, requires_grad=this_req_grad).to(this_device)
 
-        #PROBLEM: Z IS NOT USED, DEF OF Z MAKES NO SENSE I THINK. USE Y INSTEAD?
+
         if (x is not None) and (not dynamical_input):
             JxX = self.input_layer(x)
         for i in range(Nt):
@@ -416,12 +416,12 @@ class SpikingModel(nn.Module):
 
             S.zero_()
             indices = torch.nonzero(self.V>=self.Vth, as_tuple = True)
-            S[indices] = 1.0
+            S[indices] = 1.0/dt
             self.V[indices] = self.Vre
             #S[self.V >= self.Vth]=1.0
             #self.V[self.V >= self.Vth] = self.Vre
 
-            self.Y = self.Y + (1/self.tausyn)*(-dt*self.Y+S)
+            self.Y = self.Y + (dt/self.tausyn)*(-self.Y+S)
 
             if i*dt>=Tburn:
                 SimResults['r'] += S
@@ -434,10 +434,10 @@ class SpikingModel(nn.Module):
                 SimResults['S'][:, irecord, :] += S
                 SimResults['Y'][:, irecord, :] += self.Y
 
-        SimResults['r'] *= (1/(T-Tburn))
+        SimResults['r'] *= (dt/(T-Tburn))
 
         if RecordSandY:
-            SimResults['S'] *= (1/NdtRecord)
+            SimResults['S'] *= (dt/NdtRecord)
             SimResults['Y'] *= (1/NdtRecord)
 
         return SimResults
