@@ -27,8 +27,6 @@ import numpy as np
 # TO DO:
 #    - Implement network types (or just layers) EchoR and EchoZ which feed output back into input. Requires Readout==True
 #    - Implement multiple RNN layers (maybe in separate function?)
-#    - replace keep_old_state = False with initial_state = 'old' OR initial_state = None keeps old state
-#      and initial_state = 0 zeros it out.
 #    - Check to make sure initial state is consistent with z and r.
 #    - Check that forward Euler actually makes sense wrt init condition. Maybe range(1,Nt) with init before that?
 class RateModel(nn.Module):
@@ -271,20 +269,6 @@ class SpikingModel(nn.Module):
             self.DT = NeuronParams.get('DT',1)
             self.Vlb = NeuronParams.get('Vlb',-85)
             self.f = (lambda V,I: ((-(V-self.EL)+self.DT*torch.exp((V-self.VT)/self.DT)+I)/self.taum))
-        elif NeuronModel == 'CondEIF':
-            self.taum = NeuronParams.get('taum',10)
-            self.EL = NeuronParams.get('EL',-72)
-            self.Vth = NeuronParams.get('Vth',0)
-            self.Vre = NeuronParams.get('Vre',-72)
-            self.Vlb = -torch.inf
-            self.VT = NeuronParams.get('VT',-55)
-            self.DT = NeuronParams.get('DT',1.0)
-            self.Ne = NeuronParams.get('Ne',int(self.N_recurrent*.8))
-            temp = torch.ones(self.N_recurrent)
-            temp[:self.Ne]=0.0
-            temp[self.Ne:] = -80.0
-            self.E = NeuronParams.get('E',temp.copy())
-            self.f = (lambda V,I: ((-(V-self.EL)+self.DT*torch.exp((V-self.VT)/self.DT)-I*(V-self.E))/self.taum))
 
         elif NeuronModel == 'LIF':
             self.taum = NeuronParams.get('taum',10)
@@ -304,6 +288,8 @@ class SpikingModel(nn.Module):
         # Initialize state, which contains V and zsyn
         self.V = None
         self.Y = None
+
+
 
     # Forward pass.
     # If Nt==None then the second dimension of x is assumed to be time.
@@ -416,7 +402,7 @@ class SpikingModel(nn.Module):
         # Now start the acutal forward pass
         S = torch.zeros(batch_size, self.N_recurrent, requires_grad=this_req_grad).to(this_device)
 
-        #PROBLEM: Z IS NOT USED, DEF OF Z MAKES NO SENSE Z THINK. USE Y INSTEAD?
+        #PROBLEM: Z IS NOT USED, DEF OF Z MAKES NO SENSE I THINK. USE Y INSTEAD?
         if (x is not None) and (not dynamical_input):
             JxX = self.input_layer(x)
         for i in range(Nt):
