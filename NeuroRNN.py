@@ -351,7 +351,10 @@ class SpikingModel(nn.Module):
         if initial_V == 'zero':
             self.V = torch.zeros(batch_size, self.N_recurrent, requires_grad=this_req_grad).to(this_device)+self.Vre
         elif initial_V == 'random':
-            self.V = (self.Vth-self.Vre)*torch.rand(batch_size, self.N_recurrent, requires_grad=this_req_grad).to(this_device)+self.Vre
+            if hasattr(self, 'VT'):
+                self.V = (self.VT -self.Vre)*torch.rand(batch_size,self.N_recurrent, requires_grad=this_req_grad).to(this_device) + self.Vre
+            else:
+                self.V = (self.Vth-self.Vre)*torch.rand(batch_size, self.N_recurrent, requires_grad=this_req_grad).to(this_device)+self.Vre
         elif initial_V == 'keep':
             if (not torch.is_tensor(self.V)) or (self.V.shape[0] != batch_size):
                 print("initial_V was 'keep' but V was wrong type or shape. Using random init instead")
@@ -427,7 +430,7 @@ class SpikingModel(nn.Module):
                 SimResults['r'] += S
 
             if RecordV:
-                SimResults['V'][:,i,:] = self.V[:,VIRecord]+S[:,VIRecord]*(self.Vth-self.V[:,VIRecord])
+                SimResults['V'][:,i,:] = self.V[:,VIRecord]+dt*S[:,VIRecord]*(self.Vth-self.V[:,VIRecord])
 
             if RecordSandY:
                 irecord = int(i*dt/dtRecord)
