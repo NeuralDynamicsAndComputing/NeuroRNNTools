@@ -68,16 +68,16 @@ class RateModel(nn.Module):
             self.rho_input = rho_input
             self.input_layer = nn.Linear(self.N_input, self.N_recurrent, bias=False)
             self.input_layer.weight.data = rho_input * torch.randn(self.N_recurrent, self.N_input) / torch.sqrt(torch.tensor(self.N_input))
-            self.Readin = True
+            self.readin = True
         elif torch.is_tensor(readin) and len(readin.shape)==2:
             self.N_input = readin.shape[1]
             self.rho_input = None
             self.input_layer = nn.Linear(self.N_input, self.N_recurrent, bias=False)
             self.input_layer.weight.data = readin
-            self.Readin = True
+            self.readin = True
         elif (readin is None) or (readin is False):
-            self.Readin = False
-            self.N_input = None
+            self.readin = False
+            self.N_input = self.N_recurrent
             self.rho_input = None
             self.input_layer = nn.Identity()
         else:
@@ -98,7 +98,7 @@ class RateModel(nn.Module):
             self.Readout = True
         elif (readout is None) or (readout is False):
             self.Readout = False
-            self.N_output = None
+            self.N_output = self.N_recurrent
             self.rho_output = None
             self.output_layer = nn.Identity()
         else:
@@ -138,12 +138,13 @@ class RateModel(nn.Module):
 
         # Initialize recurrent state
         self.hidden_state = None
+        self.hidden_state_history = None
 
 
     # Forward pass.
     # If Nt==None then the second dimension of x is assumed to be time.
     # If Nt is an integer, then x is interpreted to be constant in time and Nt is the number of time steps.
-    def forward(self, x, Nt = None, return_time_series = True, initial_state = 'zero'):
+    def forward(self, x, Nt = None, initial_state = 'zero', return_time_series = True, store_hidden_history = True):
 
         # Get batch size, device, and requires_grad
         batch_size = x.shape[0]
@@ -151,12 +152,8 @@ class RateModel(nn.Module):
         this_req_grad = self.recurrent_layer.weight.requires_grad
 
         # Check that last dim of input is correct
-        if self.Readin:
-            if x.shape[-1]!=self.N_input:
-                raise Exception('last dim of x should be N_input ='+str(self.N_input)+'but got'+str(x.shape[-1]))
-        else:
-            if x.shape[-1]!=self.N_recurrent:
-                raise Exception('last dim of x should be N_recurrent ='+str(self.N_recurrent)+'but got'+str(x.shape[-1]))
+        if x.shape[-1]!=self.N_input:
+            raise Exception('last dim of x should be N_input ='+str(self.N_input)+'but got'+str(x.shape[-1]))
 
         # If x is 3-dimensional then Nt should be None (or equal to second dim of x) and input is dynamical.
         # Otherwise, x should be 2-dimensional and Nt needs to be passed in as an int, and input is time-constant.
@@ -175,7 +172,7 @@ class RateModel(nn.Module):
             self.hidden_state = torch.zeros(batch_size, self.N_recurrent, requires_grad=this_req_grad).to(this_device)
         elif initial_state == 'keep':
             if (not torch.is_tensor(self.hidden_state)) or (not (self.hidden_state.shape[0]==batch_size)):
-                print("initial_state = 'keep' but old state is not consistent type or shape. Using zero initial state instead.")
+                #print("initial_state = 'keep' but old state is not consistent type or shape. Using zero initial state instead.")
                 self.hidden_state = torch.zeros(batch_size, self.N_recurrent, requires_grad=this_req_grad).to(this_device)
         elif torch.is_tensor(initial_state):
             self.hidden_state = initial_state
@@ -184,7 +181,7 @@ class RateModel(nn.Module):
         self.hidden_state.to(this_device)
 
         # If we return time series, then initialize a variable for it.
-        if return_time_series:
+        if return_time_series or store_hidden_history:
             hidden_state_history = torch.zeros(batch_size, Nt, self.N_recurrent).to(this_device)
         else:
             hidden_state_history = None
@@ -194,39 +191,217 @@ class RateModel(nn.Module):
             if dynamical_input:
                 for i in range(Nt):
                     self.hidden_state = self.hidden_state + self.eta * (-self.hidden_state + self.f(self.recurrent_layer(self.hidden_state) + self.input_layer(x[:, i, :])))
-                    if return_time_series:
+                    if return_time_series or store_hidden_history:
                         hidden_state_history[:, i, :] = self.hidden_state
             else:
                 JxX = self.input_layer(x)
                 for i in range(Nt):
                     self.hidden_state = self.hidden_state + self.eta * (-self.hidden_state + self.f(self.recurrent_layer(self.hidden_state) + JxX))
-                    if return_time_series:
+                    if return_time_series or store_hidden_history:
                         hidden_state_history[:, i, :] = self.hidden_state
             if return_time_series:
                 return self.output_layer(hidden_state_history)
             else:
                 return self.output_layer(self.hidden_state)
 
+            if store_hidden_history:
+                self.hidden_state_history = hidden_state_history
+            else:
+                self.hidden_state_history = None
+
         # Z type network
         elif self.Network_Type == 'Z':
             if dynamical_input:
                 for i in range(Nt):
                     self.hidden_state = self.hidden_state + self.eta * (-self.hidden_state + self.recurrent_layer(self.f(self.hidden_state)) + self.input_layer(x[:, i, :]))
-                    if return_time_series:
+                    if return_time_series or store_hidden_history:
                         hidden_state_history[:, i, :] = self.hidden_state
             else:
                 JxX = self.input_layer(x)
                 for i in range(Nt):
                     self.hidden_state = self.hidden_state + self.eta * (-self.hidden_state + self.recurrent_layer(self.f(self.hidden_state)) + JxX)
-                    if return_time_series:
+                    if return_time_series or store_hidden_history:
                         hidden_state_history[:, i, :] = self.hidden_state
             if return_time_series:
                 return self.output_layer(self.f(hidden_state_history))
             else:
                 return self.output_layer(self.f(self.hidden_state))
 
+            if store_hidden_history:
+                self.hidden_state_history = hidden_state_history
+            else:
+                self.hidden_state_history = None
+
+
         else:
             raise Exception("Network_Type must be 'R' or 'Z'.")
+
+
+class Conv2dRateModel(nn.Module):
+
+    def __init__(self, rec_channels, rec_kernel_size, in_channels=None, readin_kernel_size=None, out_channels=None, readout_kernel_size=None,  f='tanh', eta=1,
+                 bias_recurrent=False, bias_output=False, readin_padding='same', readin_stride=1, readout_padding='same', readout_stride=1, Network_Type='R'):
+        super(RateModel, self).__init__()
+
+        # Step size for RNN dynamics
+        self.eta = eta
+
+        self.Network_Type = Network_Type
+        if Network_Type not in ('R','Z'):
+            raise Exception("Network_Type must be 'R' or 'Z'.")
+
+        # Bias True or False for each linear component.
+        # Bias in input and recurrent would be redundant, so bias=False for input.
+        self.bias_recurrent = bias_recurrent
+        self.bias_output = bias_output
+        self.rec_channels = rec_channels
+
+        # Build recurrent conv layer
+        self.recurrent_layer = nn.conv2d(rec_channels, rec_channels, rec_kernel_size, bias=bias_recurrent, padding = 'same')
+
+        # If in_channels is None then the number of channels in the input should be rec_channels
+        # and input is fed directly to the recurrent layer. Otherwise, we use a readin layer
+        if in_channels is None:
+            self.input_layer = nn.Identity()
+            self.readin = False
+            self.in_channels = rec_channels
+        else:
+            self.input_layer = nn.conv2d(in_channels, rec_channels, readin_kernel_size, bias=False,
+                                         padding=readin_padding, stride=readin_stride)
+            self.readin = True
+            self.in_channels = in_channels
+
+        # If out_channels is None then the number of channels in the output will be rec_channels
+        # and the hidden state is fed directly to the output. Otherwise, we use a readout layer
+        if in_channels is None:
+            self.output_layer = nn.Identity()
+            self.readout = False
+            self.out_channels = rec_channels
+        else:
+            self.output_layer = nn.conv2d(rec_channels, out_channels, readout_kernel_size, bias=bias_output,
+                                         padding=readout_padding, stride=readout_stride)
+            self.readout = True
+            self.out_channels = out_channels
+
+        # activation == fI curve, f, can be a string for relu, tanh, or identity
+        # OR it can be any function
+        if f == 'relu':
+            self.f = torch.relu
+        elif f == 'tanh':
+            self.f = torch.tanh
+        elif f == 'id':
+            self.f = (lambda x: x)
+        elif callable(f):
+            self.f = f
+        else:
+            raise Exception("f should be 'tanh', 'relu', 'id', or a callable function.")
+
+        # Initialize recurrent state
+        self.hidden_state = None
+        self.hidden_state_history = None
+
+
+    # Forward pass.
+    # input, x, should be (batch_size)x(in_channels)x(Nt)x(width)x(height)
+    # where Nt is number of time steps. In this case, Nt will be inferred from x and
+    # should not be passed in.
+    # OR if x is constant in time, it should be (batch_size)x(in_channels)x(width)x(height)
+    # and you must pass in Nt.
+    def forward(self, x, Nt = None, initial_state = 'auto', return_time_series = True, store_hidden_history = True):
+
+        # Get batch size, device, and requires_grad
+        batch_size = x.shape[0]
+        this_device = x.device
+        this_req_grad = self.recurrent_layer.weight.requires_grad
+
+        # Check that last dim of input is correct
+        if x.shape[1]!=self.in_channels:
+            raise Exception(
+                'x should have' + str(self.in_channels) + 'channels, but got' + str(x.shape[1]))
+
+        # If x is 4-dimensional then Nt should be None (or equal to 3rd dim of x) and input is dynamical.
+        # Otherwise, x should be 3-dimensional and Nt needs to be passed in as an int, and input is time-constant.
+        if len(x.shape)==5 and ((Nt is None) or Nt==x.shape[2]) :
+            Nt = x.shape[2]
+            dynamical_input = True
+        elif (Nt is not None) and len(x.shape)==4:
+            dynamical_input = False
+        else:
+            raise Exception('x should be 5 dim (in which case Nt should be None) or x should be 4 dim in which case you need to pass Nt.')
+
+        # If initial_state is 'zero' initialize to zeros
+        # If initial_state is 'keep' then keep old initial state
+        # If initial_state is a tensor, intialize to that state
+        if initial_state == 'zero':
+            if dynamical_input:
+                self.hidden_state = torch.zeros_like(self.input_layer(x[:,:,0,:,:]), requires_grad=this_req_grad).to(this_device)
+            else:
+                self.hidden_state = torch.zeros_like(self.input_layer(x), requires_grad=this_req_grad).to(this_device)
+        elif initial_state == 'keep':
+            if (not torch.is_tensor(self.hidden_state)) or (not (self.hidden_state.shape[0]==batch_size)):
+                #print("initial_state = 'keep' but old state is not consistent type or shape. Using zero initial state instead.")
+                self.hidden_state = torch.zeros(batch_size, self.N_recurrent, requires_grad=this_req_grad).to(this_device)
+        elif torch.is_tensor(initial_state):
+            self.hidden_state = initial_state
+        else:
+            raise Exception("initial_state should be 'zero', 'keep', or an initial state tensor.")
+        self.hidden_state.to(this_device)
+
+        # If we return time series, then initialize a variable for it.
+        if return_time_series or store_hidden_history:
+            hidden_state_history = torch.zeros(batch_size, self.rec_channels, Nt, self.hidden_state.shape[2], self.hidden_state.shape[3]).to(this_device)
+        else:
+            hidden_state_history = None
+
+        # Rate type network
+        if self.Network_Type == 'R':
+            if dynamical_input:
+                for i in range(Nt):
+                    self.hidden_state = self.hidden_state + self.eta * (-self.hidden_state + self.f(self.recurrent_layer(self.hidden_state) + self.input_layer(x[:, :, i, :, :])))
+                    if return_time_series  or store_hidden_history:
+                        hidden_state_history[:, :, i, :, :] = self.hidden_state
+            else:
+                JxX = self.input_layer(x)
+                for i in range(Nt):
+                    self.hidden_state = self.hidden_state + self.eta * (-self.hidden_state + self.f(self.recurrent_layer(self.hidden_state) + JxX))
+                    if return_time_series or store_hidden_history:
+                        hidden_state_history[:, :, i, :, :] = self.hidden_state
+            if return_time_series:
+                return self.output_layer(hidden_state_history)
+            else:
+                return self.output_layer(self.hidden_state)
+
+            if store_hidden_history:
+                self.hidden_state_history = hidden_state_history
+            else:
+                self.hidden_state_history = None
+
+        # Z type network
+        elif self.Network_Type == 'Z':
+            if dynamical_input:
+                for i in range(Nt):
+                    self.hidden_state = self.hidden_state + self.eta * (-self.hidden_state + self.recurrent_layer(self.f(self.hidden_state)) + self.input_layer(x[:, i, :]))
+                    if return_time_series or store_hidden_history:
+                        hidden_state_history[:, i, :] = self.hidden_state
+            else:
+                JxX = self.input_layer(x)
+                for i in range(Nt):
+                    self.hidden_state = self.hidden_state + self.eta * (-self.hidden_state + self.recurrent_layer(self.f(self.hidden_state)) + JxX)
+                    if return_time_series or store_hidden_history:
+                        hidden_state_history[:, i, :] = self.hidden_state
+            if return_time_series:
+                return self.output_layer(self.f(hidden_state_history))
+            else:
+                return self.output_layer(self.f(self.hidden_state))
+
+            if store_hidden_history:
+                self.hidden_state_history = hidden_state_history
+            else:
+                self.hidden_state_history = None
+
+        else:
+            raise Exception("Network_Type must be 'R' or 'Z'.")
+
 
 
 
@@ -314,10 +489,10 @@ class SpikingModel(nn.Module):
                 raise Exception('First dim of x and x0 should be the same (batch_size).')
             if self.Readin:
                 if x.shape[2]!=self.N_input:
-                    raise Exception('When x is 3-dim and Readin is True, last dim of x should be N_input.')
+                    raise Exception('When x is 3-dim and readin is True, last dim of x should be N_input.')
             else:
                 if x.shape[2]!=self.N_recurrent:
-                    raise Exception('When x is 3-dim and Readin is False, last dim of x should be N_recurrent.')
+                    raise Exception('When x is 3-dim and readin is False, last dim of x should be N_recurrent.')
         elif torch.is_tensor(x) and len(x.shape)==2:
             dynamical_input = False
             if T is None:
@@ -327,17 +502,17 @@ class SpikingModel(nn.Module):
                 raise Exception('First dim of x and x0 should be the same (batch_size).')
             if self.Readin:
                 if x.shape[1]!=self.N_input:
-                    raise Exception('When Readin is True, last dim of x should be N_input.')
+                    raise Exception('When readin is True, last dim of x should be N_input.')
             else:
                 if x.shape[1]!=self.N_recurrent:
-                    raise Exception('When Readin is False, last dim of x should be N_recurrent.')
+                    raise Exception('When readin is False, last dim of x should be N_recurrent.')
         elif x is None:
             dynamical_input = False
             if T is None:
                 raise Exception('If x is None then T cannot be None.')
             else:
                 Nt = int(T/dt)
-            # if self.Readin:
+            # if self.readin:
             #     x = torch.zeros(batch_size,self.N_input)
             # else:
             #     x = torch.zeros(batch_size,self.N_recurrent)
@@ -444,4 +619,6 @@ class SpikingModel(nn.Module):
             SimResults['Y'] *= (1/NdtRecord)
 
         return SimResults
+
+
 
