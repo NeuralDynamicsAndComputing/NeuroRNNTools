@@ -271,7 +271,7 @@ class Conv2dRateModel(nn.Module):
             self.readin = True
             self.in_channels = in_channels
 
-        # Define readout layer based on type of layer specified
+        #  Define readout layer based on type of layer specified
         if readout_type == 'id':
             self.output_layer = nn.Identity()
             self.out_channels = rec_channels
