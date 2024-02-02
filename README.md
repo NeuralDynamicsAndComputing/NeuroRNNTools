@@ -353,7 +353,7 @@ The number of channels in the recurrent layer.
 
 The kernel size of the recurrent convolutional layer.
 
-### `in_channels`
+### `in_channels` 
 
 The number of channels in the input. If `in_channels=None` then there is no input layer (effectively, $J_x$ is the 
 identity operator). In this case, the number of channels in the input must be equal to `rec_channels`.  

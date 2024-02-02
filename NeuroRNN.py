@@ -239,9 +239,9 @@ class RateModel(nn.Module):
 
 class Conv2dRateModel(nn.Module):
 
-    def __init__(self, rec_channels, rec_kernel_size, in_channels=None, readin_kernel_size=None, out_channels=None, readout_kernel_size=None,  f='tanh', eta=1,
+    def __init__(self, rec_channels, rec_kernel_size, in_channels=None, readin_kernel_size=None, readout_type = 'id', out_channels=None, readout_kernel_size=None,  f='tanh', eta=1,
                  bias_recurrent=False, bias_output=False, readin_padding='same', readin_stride=1, readout_padding='same', readout_stride=1, Network_Type='R'):
-        super(RateModel, self).__init__()
+        super(Conv2dRateModel, self).__init__()
 
         # Step size for RNN dynamics
         self.eta = eta
@@ -257,7 +257,7 @@ class Conv2dRateModel(nn.Module):
         self.rec_channels = rec_channels
 
         # Build recurrent conv layer
-        self.recurrent_layer = nn.conv2d(rec_channels, rec_channels, rec_kernel_size, bias=bias_recurrent, padding = 'same')
+        self.recurrent_layer = nn.Conv2d(rec_channels, rec_channels, rec_kernel_size, bias=bias_recurrent, padding = 'same')
 
         # If in_channels is None then the number of channels in the input should be rec_channels
         # and input is fed directly to the recurrent layer. Otherwise, we use a readin layer
@@ -266,22 +266,37 @@ class Conv2dRateModel(nn.Module):
             self.readin = False
             self.in_channels = rec_channels
         else:
-            self.input_layer = nn.conv2d(in_channels, rec_channels, readin_kernel_size, bias=False,
+            self.input_layer = nn.Conv2d(in_channels, rec_channels, readin_kernel_size, bias=False,
                                          padding=readin_padding, stride=readin_stride)
             self.readin = True
             self.in_channels = in_channels
 
-        # If out_channels is None then the number of channels in the output will be rec_channels
-        # and the hidden state is fed directly to the output. Otherwise, we use a readout layer
-        if in_channels is None:
+        # Define readout layer based on type of layer specified
+        if readout_type == 'id':
             self.output_layer = nn.Identity()
-            self.readout = False
             self.out_channels = rec_channels
-        else:
-            self.output_layer = nn.conv2d(rec_channels, out_channels, readout_kernel_size, bias=bias_output,
+            self.readout = 'id'
+        elif readout_type == 'flatten':
+            self.output_layer = nn.Flatten()
+            self.out_channels = rec_channels
+            self.readout = 'flatten'
+        elif readout_type == 'conv':
+            self.output_layer = nn.Conv2d(rec_channels, out_channels, readout_kernel_size, bias=bias_output,
                                          padding=readout_padding, stride=readout_stride)
-            self.readout = True
+            self.readout = 'conv'
             self.out_channels = out_channels
+        elif readout_type == 'conv_flatten':
+            self.output_layer = nn.Sequential(nn.Conv2d(rec_channels, out_channels, readout_kernel_size,
+                                                        bias=bias_output,padding=readout_padding,stride=readout_stride),
+                                              nn.Flatten())
+            self.readout = 'conv_flatten'
+            self.out_channels = out_channels
+        elif readout_type == 'full':
+            self.output_layer = nn.Sequential(nn.Flatten(),nn.LazyLinear(out_channels,bias=bias_output))
+            self.readout = 'full'
+            self.out_channels = out_channels
+        else:
+            raise Exception("readout_type should be 'id', 'flatten', 'conv', 'conv_flatten', or 'full'")
 
         # activation == fI curve, f, can be a string for relu, tanh, or identity
         # OR it can be any function
@@ -307,7 +322,7 @@ class Conv2dRateModel(nn.Module):
     # should not be passed in.
     # OR if x is constant in time, it should be (batch_size)x(in_channels)x(width)x(height)
     # and you must pass in Nt.
-    def forward(self, x, Nt = None, initial_state = 'auto', return_time_series = True, store_hidden_history = True):
+    def forward(self, x, Nt = None, initial_state = 'zero', return_time_series = True, store_hidden_history = True):
 
         # Get batch size, device, and requires_grad
         batch_size = x.shape[0]
@@ -358,7 +373,7 @@ class Conv2dRateModel(nn.Module):
             if dynamical_input:
                 for i in range(Nt):
                     self.hidden_state = self.hidden_state + self.eta * (-self.hidden_state + self.f(self.recurrent_layer(self.hidden_state) + self.input_layer(x[:, :, i, :, :])))
-                    if return_time_series  or store_hidden_history:
+                    if return_time_series or store_hidden_history:
                         hidden_state_history[:, :, i, :, :] = self.hidden_state
             else:
                 JxX = self.input_layer(x)
@@ -380,15 +395,15 @@ class Conv2dRateModel(nn.Module):
         elif self.Network_Type == 'Z':
             if dynamical_input:
                 for i in range(Nt):
-                    self.hidden_state = self.hidden_state + self.eta * (-self.hidden_state + self.recurrent_layer(self.f(self.hidden_state)) + self.input_layer(x[:, i, :]))
+                    self.hidden_state = self.hidden_state + self.eta * (-self.hidden_state + self.recurrent_layer(self.f(self.hidden_state)) + self.input_layer(x[:, :, i, :, :]))
                     if return_time_series or store_hidden_history:
-                        hidden_state_history[:, i, :] = self.hidden_state
+                        hidden_state_history[:, :, i, :, :] = self.hidden_state
             else:
                 JxX = self.input_layer(x)
                 for i in range(Nt):
                     self.hidden_state = self.hidden_state + self.eta * (-self.hidden_state + self.recurrent_layer(self.f(self.hidden_state)) + JxX)
                     if return_time_series or store_hidden_history:
-                        hidden_state_history[:, i, :] = self.hidden_state
+                        hidden_state_history[:, :, i, :, :] = self.hidden_state
             if return_time_series:
                 return self.output_layer(self.f(hidden_state_history))
             else:
