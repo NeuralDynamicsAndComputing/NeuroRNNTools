@@ -350,7 +350,7 @@ model = Con2dRateModel(rec_channels, rec_kernel_size, in_channels=None, readin_k
 The number of channels in the recurrent layer.
 
 ### `rec_kernel_size`
-
+  
 The kernel size of the recurrent convolutional layer.
 
 ### `in_channels` 
