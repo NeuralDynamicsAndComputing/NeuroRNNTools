@@ -49,8 +49,10 @@ A standard RNN can be created using
 ```
 model = RateModel(N, Nx)
 ```
-where `N` is the number of hidden units and `Nx` is the input size. This will create an RNN that is similar to a standard PyTorch 
-RNN (`model = torch.nn.RNN(N,Nx)`) except `bias=False` by default in RateModel. A forward pass can then be computed by 
+where `N` is the number of hidden units and `Nx` is the input size. This will create an RNN that is equivalent a standard PyTorch 
+RNN (`model = torch.nn.RNN(N,Nx)`). 
+
+A forward pass can then be computed by 
 ```
 y = model(x)
 ```

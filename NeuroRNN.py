@@ -31,7 +31,7 @@ import numpy as np
 #    - Check that forward Euler actually makes sense wrt init condition. Maybe range(1,Nt) with init before that?
 class RateModel(nn.Module):
 
-    def __init__(self, recurrent, readin=None, readout=None, f='tanh', eta=1, rho_recurrent=1, rho_input=1, rho_output=1, bias_recurrent=False, bias_output=False, Network_Type='R'):
+    def __init__(self, recurrent, readin=None, readout=None, f='tanh', eta=1, rho_recurrent=1, rho_input=1, rho_output=1, bias_recurrent=True, bias_output=True, Network_Type='R'):
         super(RateModel, self).__init__()
 
         # Step size for RNN dynamics
