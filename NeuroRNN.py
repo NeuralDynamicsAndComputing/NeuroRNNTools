@@ -708,149 +708,152 @@ class SpikingModelrx(nn.Module):
     # If Nt is an integer, then x is interpreted to be constant in time and Nt is the number of time steps.
     def forward(self, x0, dt, T, rx=None, initial_V='random', initial_Y='zero', dtRecord = None, Tburn = 0, VIRecord = []):
 
-        with torch.no_grad():
-            # Get batch size, device, and requires_grad
-            batch_size = x0.shape[0]
-            this_device = x0.device
-            this_req_grad = self.recurrent_layer.weight.requires_grad
-            Nt = int(T / dt)
 
-            # Make sure x0 is correct shape
-            if len(x0.shape)!=2 or x0.shape[1]!=self.N_recurrent:
-                raise Exception('x0 should be (batch_size)x(N_recurent).')
+        # Get batch size, device, and requires_grad
+        batch_size = x0.shape[0]
+        this_device = x0.device
+        this_req_grad = self.recurrent_layer.weight.requires_grad
+        Nt = int(T / dt)
 
-            # Check shape and type of rx.
+        # Make sure x0 is correct shape
+        if len(x0.shape)!=2 or x0.shape[1]!=self.N_recurrent:
+            raise Exception('x0 should be (batch_size)x(N_recurent).')
 
-            if torch.is_tensor(rx) and len(rx.shape)==2:
-                batched_rx = True
-                Nx = rx.shape[1]
-                if not self.Readin:
-                    raise Exception('Readin should be True if rx is passed in')
-                if rx.shape[0]!=batch_size:
-                    raise Exception('When rx is batched, first dims of x0 and rx should match.')
-            elif torch.is_tensor(rx) and len(rx.shape)==1:
-                batched_rx = False
-                Nx = rx.shape[0]
-                if not self.Readin:
-                    raise Exception('Readin should be True if rx is passed in')
-            elif rx is None:
-                if self.Readin:
-                    print('Readin is True, but no input rates were passed.')
-            else:
-                raise Exception('rx should be a 2-dim tensor, 1-dim tensor, or None.')
+        # Check shape and type of rx.
 
-            # If initial_V is 'zero' initialize to Vre (not actually zero)
-            # If initial_V is 'rand' initialize to uniform dist from Vre to Vth
-            # If initial_state is 'keep' then keep old initial state
-            # If initial_state is a tensor, intialize to that state
-            if initial_V == 'zero':
-                self.V = torch.zeros(batch_size, self.N_recurrent, requires_grad=this_req_grad).to(this_device)+self.Vre
-            elif initial_V == 'random':
-                if hasattr(self, 'VT'):
-                    self.V = (self.VT -self.Vre)*torch.rand(batch_size,self.N_recurrent, requires_grad=this_req_grad).to(this_device) + self.Vre
-                else:
-                    self.V = (self.Vth-self.Vre)*torch.rand(batch_size, self.N_recurrent, requires_grad=this_req_grad).to(this_device)+self.Vre
-            elif initial_V == 'keep':
-                if (not torch.is_tensor(self.V)) or (self.V.shape[0] != batch_size):
-                    print("initial_V was 'keep' but V was wrong type or shape. Using random init instead")
-                    self.V = (self.Vth-self.Vre)*torch.rand(batch_size, self.N_recurrent, requires_grad=this_req_grad).to(this_device)+self.Vre
-            elif torch.is_tensor(initial_V) and initial_V.shape==(batch_size,self.N_recurrent):
-                self.V = initial_V
-            else:
-                raise Exception("initial_V should be 'zero', 'keep', or an initial tensor of shape (batch_size,N_recurrent)="+str((batch_size,self.N_recurrent)))
-
-            # Same as initial_V except no random option
-            if initial_Y == 'zero':
-                self.Y = torch.zeros(batch_size, self.N_recurrent).to(this_device)
-                if self.Readin:
-                    self.Yx = torch.zeros(batch_size, Nx).to(this_device)
-            elif initial_Y == 'keep':
-                if (not torch.is_tensor(self.Y)) or (self.Y.shape[0] != batch_size):
-                    print("initial_Y was 'keep' but Y was wrong type or shape. Using zero init instead")
-                    self.Y = torch.zeros(batch_size, self.N_recurrent).to(this_device)
-                if self.Readin:
-                    if (not torch.is_tensor(self.Yx)) or (self.Yx.shape[0] != batch_size):
-                        print("initial_Y was 'keep' but Yx was wrong type or shape. Using zero init instead")
-                        self.Yx = torch.zeros(batch_size, self.Nx).to(this_device)
-
-            elif torch.is_tensor(initial_Y) and initial_Y.shape==(batch_size,self.N_recurrent):
-                self.Y = initial_Y
-                if self.Readin:
-                    self.Yx = torch.zeros(batch_size, Nx).to(this_device)
-            else:
-                raise Exception("initial_Y should be 'zero', 'keep', or an initial tensor of shape (batch_size,N_recurrent)="+str((batch_size,self.N_recurrent)))
-            self.Y.requires_grad = this_req_grad
-            self.Y.to(this_device)
+        if torch.is_tensor(rx) and len(rx.shape)==2:
+            batched_rx = True
+            #Nx = rx.shape[1]
+            if rx.shape[1]!=self.N_input:
+                raise Exception('Second dimension of rx should be Nx=N_input='+str(self.N_input))
+            if not self.Readin:
+                raise Exception('Readin should be True if rx is passed in')
+            if rx.shape[0]!=batch_size:
+                raise Exception('When rx is batched, first dims of x0 and rx should match.')
+        elif torch.is_tensor(rx) and len(rx.shape)==1:
+            batched_rx = False
+            if rx.shape[0] != self.N_input:
+                raise Exception('First dimension of rx should be Nx=N_input=' + str(self.N_input))
+            if not self.Readin:
+                raise Exception('Readin should be True if rx is passed in')
+        elif rx is None:
             if self.Readin:
-                self.Yx.requires_grad = this_req_grad
-                self.Yx.to(this_device)
+                print('Readin is True, but no input rates were passed.')
+        else:
+            raise Exception('rx should be a 2-dim tensor, 1-dim tensor, or None.')
 
-            # Initialize dictionary that will store results of sim
-            SimResults = {}
-            SimResults['r'] = torch.zeros(batch_size, self.N_recurrent, requires_grad=this_req_grad).to(this_device)
-            if dtRecord is None:
-                RecordSandY = False
-                SimResults['S'] = None
-                SimResults['Y'] = None
+        # If initial_V is 'zero' initialize to Vre (not actually zero)
+        # If initial_V is 'rand' initialize to uniform dist from Vre to Vth
+        # If initial_state is 'keep' then keep old initial state
+        # If initial_state is a tensor, intialize to that state
+        if initial_V == 'zero':
+            self.V = torch.zeros(batch_size, self.N_recurrent, requires_grad=this_req_grad).to(this_device)+self.Vre
+        elif initial_V == 'random':
+            if hasattr(self, 'VT'):
+                self.V = (self.VT -self.Vre)*torch.rand(batch_size,self.N_recurrent, requires_grad=this_req_grad).to(this_device) + self.Vre
             else:
-                RecordSandY = True
-                NdtRecord = int(dtRecord/dt)
-                if NdtRecord<=0 or NdtRecord>Nt:
-                    raise Exception('dtRecord should be between dt and T respectively.')
-                NtRecord = int(T/dtRecord)
-                SimResults['S'] = torch.zeros(batch_size, NtRecord, self.N_recurrent, requires_grad=this_req_grad).to(this_device)
-                SimResults['Y'] = torch.zeros(batch_size, NtRecord, self.N_recurrent, requires_grad=this_req_grad).to(this_device)
+                self.V = (self.Vth-self.Vre)*torch.rand(batch_size, self.N_recurrent, requires_grad=this_req_grad).to(this_device)+self.Vre
+        elif initial_V == 'keep':
+            if (not torch.is_tensor(self.V)) or (self.V.shape[0] != batch_size):
+                print("initial_V was 'keep' but V was wrong type or shape. Using random init instead")
+                self.V = (self.Vth-self.Vre)*torch.rand(batch_size, self.N_recurrent, requires_grad=this_req_grad).to(this_device)+self.Vre
+        elif torch.is_tensor(initial_V) and initial_V.shape==(batch_size,self.N_recurrent):
+            self.V = initial_V
+        else:
+            raise Exception("initial_V should be 'zero', 'keep', or an initial tensor of shape (batch_size,N_recurrent)="+str((batch_size,self.N_recurrent)))
 
-            if isinstance(VIRecord,list) and len(VIRecord)>0:
-                RecordV = True
-                NVRecord = len(VIRecord)
-                SimResults['V'] = torch.zeros(batch_size, Nt, NVRecord, requires_grad=this_req_grad).to(this_device)
-            elif (VIRecord is None) or (VIRecord == []):
-                RecordV = False
-                SimResults['V'] = None
+        # Same as initial_V except no random option
+        if initial_Y == 'zero':
+            self.Y = torch.zeros(batch_size, self.N_recurrent).to(this_device)
+            if self.Readin:
+                self.Yx = torch.zeros(batch_size, self.N_input).to(this_device)
+        elif initial_Y == 'keep':
+            if (not torch.is_tensor(self.Y)) or (self.Y.shape[0] != batch_size):
+                print("initial_Y was 'keep' but Y was wrong type or shape. Using zero init instead")
+                self.Y = torch.zeros(batch_size, self.N_recurrent).to(this_device)
+            if self.Readin:
+                if (not torch.is_tensor(self.Yx)) or (self.Yx.shape[0] != batch_size):
+                    print("initial_Y was 'keep' but Yx was wrong type or shape. Using zero init instead")
+                    self.Yx = torch.zeros(batch_size, self.N_input).to(this_device)
 
-            # Now start the acutal forward pass
-            S = torch.zeros(batch_size, self.N_recurrent, requires_grad=this_req_grad).to(this_device)
+        elif torch.is_tensor(initial_Y) and initial_Y.shape==(batch_size,self.N_recurrent):
+            self.Y = initial_Y
+            if self.Readin:
+                self.Yx = torch.zeros(batch_size, self.N_input).to(this_device)
+        else:
+            raise Exception("initial_Y should be 'zero', 'keep', or an initial tensor of shape (batch_size,N_recurrent)="+str((batch_size,self.N_recurrent)))
+        self.Y.requires_grad = this_req_grad
+        self.Y.to(this_device)
+        if self.Readin:
+            self.Yx.requires_grad = this_req_grad
+            self.Yx.to(this_device)
 
-            for i in range(Nt):
-                Z = self.recurrent_layer(self.Y)+x0
-                if self.Readin:
-                    Z = Z + self.input_layer(self.Yx)
+        # Initialize dictionary that will store results of sim
+        SimResults = {}
+        SimResults['r'] = torch.zeros(batch_size, self.N_recurrent, requires_grad=this_req_grad).to(this_device)
+        if dtRecord is None:
+            RecordSandY = False
+            SimResults['S'] = None
+            SimResults['Y'] = None
+        else:
+            RecordSandY = True
+            NdtRecord = int(dtRecord/dt)
+            if NdtRecord<=0 or NdtRecord>Nt:
+                raise Exception('dtRecord should be between dt and T respectively.')
+            NtRecord = int(T/dtRecord)
+            SimResults['S'] = torch.zeros(batch_size, NtRecord, self.N_recurrent, requires_grad=this_req_grad).to(this_device)
+            SimResults['Y'] = torch.zeros(batch_size, NtRecord, self.N_recurrent, requires_grad=this_req_grad).to(this_device)
 
-                # if x is not None:
-                #     if dynamical_input:
-                #         Z = Z + self.input_layer(x[:,i,:])
-                #     else:
-                #         Z = Z + JxX
-                self.V = torch.clamp(self.V + dt*self.f(self.V, Z), min=self.Vlb)
+        if isinstance(VIRecord,list) and len(VIRecord)>0:
+            RecordV = True
+            NVRecord = len(VIRecord)
+            SimResults['V'] = torch.zeros(batch_size, Nt, NVRecord, requires_grad=this_req_grad).to(this_device)
+        elif (VIRecord is None) or (VIRecord == []):
+            RecordV = False
+            SimResults['V'] = None
 
-                S.zero_()
-                indices = torch.nonzero(self.V>=self.Vth, as_tuple = True)
-                S[indices] = 1.0/dt
-                self.V[indices] = self.Vre
-                #S[self.V >= self.Vth]=1.0
-                #self.V[self.V >= self.Vth] = self.Vre
+        # Now start the acutal forward pass
+        S = torch.zeros(batch_size, self.N_recurrent, requires_grad=this_req_grad).to(this_device)
 
-                self.Y = self.Y + (dt/self.tausyn)*(-self.Y+S)
-                if self.Readin:
-                    Sx = torch.bernoulli(dt*rx.expand(batch_size,Nx))/dt
-                    self.Yx = self.Yx + (dt / self.taux)*(-self.Yx+Sx)
+        for i in range(Nt):
+            Z = self.recurrent_layer(self.Y)+x0
+            if self.Readin:
+                Z = Z + self.input_layer(self.Yx)
 
-                if i*dt>=Tburn:
-                    SimResults['r'] += S
+            # if x is not None:
+            #     if dynamical_input:
+            #         Z = Z + self.input_layer(x[:,i,:])
+            #     else:
+            #         Z = Z + JxX
+            self.V = torch.clamp(self.V + dt*self.f(self.V, Z), min=self.Vlb)
 
-                if RecordV:
-                    SimResults['V'][:,i,:] = self.V[:,VIRecord]+dt*S[:,VIRecord]*(self.Vth-self.V[:,VIRecord])
+            S.zero_()
+            indices = torch.nonzero(self.V>=self.Vth, as_tuple = True)
+            S[indices] = 1.0/dt
+            self.V[indices] = self.Vre
+            #S[self.V >= self.Vth]=1.0
+            #self.V[self.V >= self.Vth] = self.Vre
 
-                if RecordSandY:
-                    irecord = int(i*dt/dtRecord)
-                    SimResults['S'][:, irecord, :] += S
-                    SimResults['Y'][:, irecord, :] += self.Y
+            self.Y = self.Y + (dt/self.tausyn)*(-self.Y+S)
+            if self.Readin:
+                Sx = torch.bernoulli(dt*rx.expand(batch_size,self.N_input))/dt
+                self.Yx = self.Yx + (dt / self.taux)*(-self.Yx+Sx)
 
-            SimResults['r'] *= (dt/(T-Tburn))
+            if i*dt>=Tburn:
+                SimResults['r'] += S
+
+            if RecordV:
+                SimResults['V'][:,i,:] = self.V[:,VIRecord]+dt*S[:,VIRecord]*(self.Vth-self.V[:,VIRecord])
 
             if RecordSandY:
-                SimResults['S'] *= (dt/NdtRecord)
-                SimResults['Y'] *= (1/NdtRecord)
+                irecord = int(i*dt/dtRecord)
+                SimResults['S'][:, irecord, :] += S
+                SimResults['Y'][:, irecord, :] += self.Y
 
-            return SimResults
+        SimResults['r'] *= (dt/(T-Tburn))
+
+        if RecordSandY:
+            SimResults['S'] *= (dt/NdtRecord)
+            SimResults['Y'] *= (1/NdtRecord)
+
+        return SimResults
