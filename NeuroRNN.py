@@ -607,11 +607,6 @@ class SpikingModel(nn.Module):
         # Now start the acutal forward pass
         S = torch.zeros(batch_size, self.N_recurrent, requires_grad=this_req_grad).to(this_device)
 
-        # print('SYVx0mean', S.mean().item(),self.Y.mean().item(),self.V.mean().item(),x0.mean().item())  #!#
-        # print('rmean', SimResults['r'].mean().item())
-
-        # flag=True#!#
-
         if (x is not None) and (not dynamical_input):
             JxX = self.input_layer(x)
         for i in range(Nt):
@@ -623,19 +618,15 @@ class SpikingModel(nn.Module):
                     Z = Z + JxX
             self.V = torch.clamp(self.V + dt*self.f(self.V, Z), min=self.Vlb)
 
-            mask = (self.V>=self.Vth)
-            S = mask/dt
 
-            #S.zero_()#$#
-            #indices = torch.nonzero(self.V>=self.Vth, as_tuple=True)
-            #S[indices] = 1.0/dt#$#
+            mask = (self.V>=self.Vth)
+            self.V[mask] = self.Vre
+            S = mask/dt
 
             if i*dt>=Tburn:
                 SimResults['r'] += S
 
-            #self.V[indices] = self.Vre#$#
 
-            self.V[mask] = self.Vre
 
             self.Y = self.Y + (dt/self.tausyn)*(-self.Y+S)
 
@@ -648,18 +639,8 @@ class SpikingModel(nn.Module):
                 SimResults['S'][:, irecord, :] += S
                 SimResults['Y'][:, irecord, :] += self.Y
 
-        #     if i==2:
-        #         print('SYVx0mean2', S.mean().item(),self.Y.mean().item(),self.V.mean().item(),x0.mean().item())  #!#
-        #         print('Zrmean2',Z.mean().item(),SimResults['r'].mean().item())
-        #
-        #     if i==10000:
-        #         print('SYVx0mean10000', S.mean().item(),self.Y.mean().item(),self.V.mean().item(),x0.mean().item())  #!#
-        #         print('Zrmean10000',Z.mean().item(),SimResults['r'].mean().item())
-        #
-        # print('r1b', SimResults['r'].mean())
 
         SimResults['r'] *= (dt/(T-Tburn))
-        # print('r2b', SimResults['r'].mean())
 
         if RecordSandY:
             SimResults['S'] *= (dt/NdtRecord)
@@ -859,12 +840,9 @@ class SpikingModelrx(nn.Module):
             #         Z = Z + JxX
             self.V = torch.clamp(self.V + dt*self.f(self.V, Z), min=self.Vlb)
 
-            S.zero_()
-            indices = torch.nonzero(self.V>=self.Vth, as_tuple = True)
-            S[indices] = 1.0/dt
-            self.V[indices] = self.Vre
-            #S[self.V >= self.Vth]=1.0
-            #self.V[self.V >= self.Vth] = self.Vre
+            mask = (self.V>=self.Vth)
+            self.V[mask] = self.Vre
+            S = mask/dt
 
             self.Y = self.Y + (dt/self.tausyn)*(-self.Y+S)
             if self.Readin:
