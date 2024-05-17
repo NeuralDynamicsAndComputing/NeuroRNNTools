@@ -51,12 +51,19 @@ def GetBlockErdosRenyi(NsPre,Jm,P,NsPost=None):
 # Create a smooth Gaussian process by convolving
 # white noise with a Gaussian kernel.
 # Noise will have variance=1
-def MakeSmoothGaussianProcess(taux,Nt,dt):
-  taus=np.arange(-4*taux,4*taux,dt)
-  K=(1/(taux*np.sqrt(2*np.pi)))*np.exp(-taus**2/(2*taux**2))
-  K=K/(dt*K.sum())
-  X=np.random.randn(Nt)/np.sqrt(dt)
-  X=np.sqrt(2*np.sqrt(np.pi)*taux)*np.convolve(K,X,'same')*dt
+def MakeSmoothGaussianProcess(taux,Nt,dt,N=1):
+  taus = np.arange(-4 * taux, 4 * taux, dt)
+  K = (1 / (taux * np.sqrt(2 * np.pi))) * np.exp(-taus ** 2 / (2 * taux ** 2))
+  K = K / (dt * K.sum())
+  if N==1:
+    temp=np.random.randn(Nt)/np.sqrt(dt)
+    X=np.sqrt(2*np.sqrt(np.pi)*taux)*np.convolve(K,temp,'same')*dt
+  else:
+    X=np.zeros((N, Nt))
+    for j in range(N):
+      temp = np.random.randn(Nt) / np.sqrt(dt)
+      X[j,:] = np.sqrt(2*np.sqrt(np.pi)*taux)*np.convolve(K, temp, 'same') * dt
+
   return torch.tensor(X)
 
 
