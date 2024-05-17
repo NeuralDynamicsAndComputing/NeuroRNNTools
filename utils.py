@@ -52,7 +52,7 @@ def GetBlockErdosRenyi(NsPre,Jm,P,NsPost=None):
 # white noise with a Gaussian kernel.
 # Noise will have variance=1
 def MakeSmoothGaussianProcess(taux,Nt,dt):
-  taus=np.arange(-3*taux,3*taux,dt)
+  taus=np.arange(-4*taux,4*taux,dt)
   K=(1/(taux*np.sqrt(2*np.pi)))*np.exp(-taus**2/(2*taux**2))
   K=K/(dt*K.sum())
   X=np.random.randn(Nt)/np.sqrt(dt)

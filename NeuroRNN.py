@@ -199,15 +199,17 @@ class RateModel(nn.Module):
                     self.hidden_state = self.hidden_state + self.eta * (-self.hidden_state + self.f(self.recurrent_layer(self.hidden_state) + JxX))
                     if return_time_series or store_hidden_history:
                         hidden_state_history[:, i, :] = self.hidden_state
-            if return_time_series:
-                return self.output_layer(hidden_state_history)
-            else:
-                return self.output_layer(self.hidden_state)
 
             if store_hidden_history:
                 self.hidden_state_history = hidden_state_history
             else:
                 self.hidden_state_history = None
+
+            if return_time_series:
+                return self.output_layer(hidden_state_history)
+            else:
+                return self.output_layer(self.hidden_state)
+
 
         # Z type network
         elif self.Network_Type == 'Z':
@@ -222,16 +224,16 @@ class RateModel(nn.Module):
                     self.hidden_state = self.hidden_state + self.eta * (-self.hidden_state + self.recurrent_layer(self.f(self.hidden_state)) + JxX)
                     if return_time_series or store_hidden_history:
                         hidden_state_history[:, i, :] = self.hidden_state
-            if return_time_series:
-                return self.output_layer(self.f(hidden_state_history))
-            else:
-                return self.output_layer(self.f(self.hidden_state))
 
             if store_hidden_history:
                 self.hidden_state_history = hidden_state_history
             else:
                 self.hidden_state_history = None
 
+            if return_time_series:
+                return self.output_layer(self.f(hidden_state_history))
+            else:
+                return self.output_layer(self.f(self.hidden_state))
 
         else:
             raise Exception("Network_Type must be 'R' or 'Z'.")
@@ -381,15 +383,17 @@ class Conv2dRateModel(nn.Module):
                     self.hidden_state = self.hidden_state + self.eta * (-self.hidden_state + self.f(self.recurrent_layer(self.hidden_state) + JxX))
                     if return_time_series or store_hidden_history:
                         hidden_state_history[:, :, i, :, :] = self.hidden_state
-            if return_time_series:
-                return self.output_layer(hidden_state_history)
-            else:
-                return self.output_layer(self.hidden_state)
 
             if store_hidden_history:
                 self.hidden_state_history = hidden_state_history
             else:
                 self.hidden_state_history = None
+
+            if return_time_series:
+                return self.output_layer(hidden_state_history)
+            else:
+                return self.output_layer(self.hidden_state)
+
 
         # Z type network
         elif self.Network_Type == 'Z':
@@ -404,15 +408,17 @@ class Conv2dRateModel(nn.Module):
                     self.hidden_state = self.hidden_state + self.eta * (-self.hidden_state + self.recurrent_layer(self.f(self.hidden_state)) + JxX)
                     if return_time_series or store_hidden_history:
                         hidden_state_history[:, :, i, :, :] = self.hidden_state
-            if return_time_series:
-                return self.output_layer(self.f(hidden_state_history))
-            else:
-                return self.output_layer(self.f(self.hidden_state))
 
             if store_hidden_history:
                 self.hidden_state_history = hidden_state_history
             else:
                 self.hidden_state_history = None
+
+            if return_time_series:
+                return self.output_layer(self.f(hidden_state_history))
+            else:
+                return self.output_layer(self.f(self.hidden_state))
+
 
         else:
             raise Exception("Network_Type must be 'R' or 'Z'.")
