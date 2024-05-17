@@ -844,6 +844,7 @@ class SpikingModelrx(nn.Module):
             #         Z = Z + self.input_layer(x[:,i,:])
             #     else:
             #         Z = Z + JxX
+
             self.V = torch.clamp(self.V + dt*self.f(self.V, Z), min=self.Vlb)
 
             mask = (self.V>=self.Vth)
