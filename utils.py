@@ -51,7 +51,7 @@ def GetBlockErdosRenyi(NsPre,Jm,P,NsPost=None):
 # Create a smooth Gaussian process by convolving
 # white noise with a Gaussian kernel.
 # Noise will have variance=1
-def c(taux, Nt, dt, N=1, device='cpu'):
+def MakeSmoothGaussianProcess(taux, Nt, dt, N=1, device='cpu'):
 
   import torch.nn.functional as F
   pi0 = 3.1415927410125732
