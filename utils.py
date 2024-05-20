@@ -62,14 +62,14 @@ def MakeSmoothGaussianProcess(taux, Nt, dt, N=1, device='cpu'):
   K = K / (dt * K.sum())
 
   if N==1:
-    white_noise = (1/torch.sqrt(dt))*torch.randn(Nt).to(device)
+    white_noise = (1/np.sqrt(dt))*torch.randn(Nt).to(device)
     X = F.conv1d(white_noise, K, padding='same')*dt
   else:
 
     # Interpret white_noise=temp as N batches and 1 channel.
     # This lets us apply the same kernel to all "channels"
     # because channels are interpreted as batches
-    white_noise=(1/torch.sqrt(dt))*torch.randn(N, 1, Nt).to(device)
+    white_noise=(1/np.sqrt(dt))*torch.randn(N, 1, Nt).to(device)
 
     X = torch.squeeze(F.conv1d(white_noise, K, padding='same')*dt)
 
