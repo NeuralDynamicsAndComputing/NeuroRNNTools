@@ -51,20 +51,29 @@ def GetBlockErdosRenyi(NsPre,Jm,P,NsPost=None):
 # Create a smooth Gaussian process by convolving
 # white noise with a Gaussian kernel.
 # Noise will have variance=1
-def MakeSmoothGaussianProcess(taux,Nt,dt,N=1):
-  taus = np.arange(-4 * taux, 4 * taux, dt)
-  K = (1 / (taux * np.sqrt(2 * np.pi))) * np.exp(-taus ** 2 / (2 * taux ** 2))
-  K = K / (dt * K.sum())
-  if N==1:
-    temp=np.random.randn(Nt)/np.sqrt(dt)
-    X=np.sqrt(2*np.sqrt(np.pi)*taux)*np.convolve(K,temp,'same')*dt
-  else:
-    X=np.zeros((N, Nt))
-    for j in range(N):
-      temp = np.random.randn(Nt) / np.sqrt(dt)
-      X[j,:] = np.sqrt(2*np.sqrt(np.pi)*taux)*np.convolve(K, temp, 'same') * dt
+def MakeSmoothGaussianProcess(taux, Nt, dt, N=1, device='cpu'):
 
-  return torch.tensor(X)
+  import torch.nn.functional as F
+  pi0 = 3.1415927410125732
+
+  # Make kernel
+  taus = torch.range(-4 * taux, 4 * taux, dt).to(device)
+  K = (1 / (taux * np.sqrt(2 * pi0))) * torch.exp(-taus ** 2 / (2 * taux ** 2))
+  K = K / (dt * K.sum())
+
+  if N==1:
+    white_noise = (1/torch.sqrt(dt))*torch.randn(Nt).to(device)
+    X = F.conv1d(white_noise, K, padding='same')*dt
+  else:
+
+    # Interpret white_noise=temp as N batches and 1 channel.
+    # This lets us apply the same kernel to all "channels"
+    # because channels are interpreted as batches
+    white_noise=(1/torch.sqrt(dt))*torch.randn(N, 1, Nt).to(device)
+
+    X = torch.squeeze(F.conv1d(white_noise, K, padding='same')*dt)
+
+  return X
 
 
 # Generate Poisson process with batch dimension too
