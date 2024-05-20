@@ -73,6 +73,9 @@ def MakeSmoothGaussianProcess(taux, Nt, dt, N=1, device='cpu'):
 
     X = torch.squeeze(F.conv1d(white_noise, K, padding='same')*dt)
 
+  # This makes stationary var=1
+  X *= np.sqrt(2*np.sqrt(np.pi)*taux)
+
   return X
 
 
