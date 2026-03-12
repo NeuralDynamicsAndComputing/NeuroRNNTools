@@ -1,3 +1,5 @@
+# NOTICE: THIS REPOSITORY IS NO LONGER MAINTAINED. SEE https://github.com/RobertRosenbaum/NeuroSimTools FOR A NEWER VERSION OF THE REPO THAT IS BETTER MAINTAINED.
+
 # NeuroRNNTools
 PyTorch models for RNNs commonly used in computational neuroscience.
 
